@@ -35,6 +35,33 @@ list_all_versions() {
   list_github_tags
 }
 
+get_actual_download_url() {
+  local platform arch version zformat
+  platform="$1"
+  arch="$2"
+  version="$3"
+  zformat="$4"
+
+  # Query GitHub API to find the actual download URL
+  local api_url="https://api.github.com/repos/odin-lang/Odin/releases/tags/${version}"
+  local pattern="odin-${platform}-${arch}-${version}"
+
+  # Try to find a URL that matches our pattern and format
+  local url=$(curl "${curl_opts[@]}" "$api_url" 2>/dev/null | \
+    grep -o '"browser_download_url": "[^"]*"' | \
+    grep -o 'https://[^"]*' | \
+    grep "${pattern}" | \
+    grep "\.${zformat}$" | \
+    head -1)
+
+  if [ -n "$url" ]; then
+    echo "$url"
+  else
+    # Fallback to old pattern
+    echo "$GH_REPO/releases/download/${version}/odin-${platform}-${arch}-${version}.${zformat}"
+  fi
+}
+
 build_url() {
   local platform arch version zformat
   platform="$1"
@@ -42,7 +69,7 @@ build_url() {
   version="$3"
   zformat="$4"
 
-  echo "$GH_REPO/releases/download/${version}/odin-${platform}-${arch}-${version}.${zformat}"
+  get_actual_download_url "$platform" "$arch" "$version" "$zformat"
 }
 
 get_platform() {
@@ -52,15 +79,24 @@ get_platform() {
 
   case "$OSTYPE" in
   linux*)
-    for zformat in {"zip","tar.gz","tar.bz2","tar.xz"}; do
-      if curl -o /dev/null -s --head --fail $(build_url "linux" "$arch" "$version" "$zformat"); then
-        found="linux ${zformat}"
-        break
-      elif curl -o /dev/null -s --head --fail $(build_url "ubuntu" "$arch" "$version" "$zformat"); then
-        found="ubuntu ${zformat}"
-        break
-      fi
+    # Query GitHub API to find available downloads for this version
+    local api_url="https://api.github.com/repos/odin-lang/Odin/releases/tags/${version}"
+    local available_downloads=$(curl "${curl_opts[@]}" "$api_url" 2>/dev/null | \
+      grep -o '"browser_download_url": "[^"]*"' | \
+      grep -o 'https://[^"]*' | \
+      grep -E "(linux|ubuntu)" | \
+      grep "${arch}")
+
+    # Try different platform names and formats
+    for platform_name in "linux" "ubuntu"; do
+      for zformat in "zip" "tar.gz" "tar.bz2" "tar.xz"; do
+        if echo "$available_downloads" | grep -q "odin-${platform_name}-${arch}.*\.${zformat}$"; then
+          found="${platform_name} ${zformat}"
+          break 2
+        fi
+      done
     done
+
     if [ -n "$found" ]; then
       echo "$found"
     else
@@ -68,12 +104,21 @@ get_platform() {
     fi
     ;;
   darwin*)
-    for zformat in {"zip","tar.gz","tar.bz2","tar.xz"}; do
-      if curl -o /dev/null -s --head --fail $(build_url "macos" "$arch" "$version" "$zformat"); then
+    # Query GitHub API to find available downloads for this version
+    local api_url="https://api.github.com/repos/odin-lang/Odin/releases/tags/${version}"
+    local available_downloads=$(curl "${curl_opts[@]}" "$api_url" 2>/dev/null | \
+      grep -o '"browser_download_url": "[^"]*"' | \
+      grep -o 'https://[^"]*' | \
+      grep "macos" | \
+      grep "${arch}")
+
+    for zformat in "zip" "tar.gz" "tar.bz2" "tar.xz"; do
+      if echo "$available_downloads" | grep -q "odin-macos-${arch}.*\.${zformat}$"; then
         found="macos ${zformat}"
         break
       fi
     done
+
     if [ -n "$found" ]; then
       echo "$found"
     else
@@ -92,9 +137,10 @@ download_release() {
   zformat="$4"
   filename="$5"
 
-  url=$(build_url "$platform" "$arch" "$version" "$zformat")
+  url=$(get_actual_download_url "$platform" "$arch" "$version" "$zformat")
 
   echo "* Downloading $TOOL_NAME release $version..."
+  echo "* Download URL: $url"
   curl "${curl_opts[@]}" -o "$filename" -C - "$url" || fail "Could not download $url"
 }
 
