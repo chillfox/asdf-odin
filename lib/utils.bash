@@ -46,7 +46,7 @@ build_url() {
 }
 
 get_platform() {
-  local arch version found
+  local arch version found=""
   arch="$1"
   version="$2"
 
@@ -70,10 +70,15 @@ get_platform() {
   darwin*)
     for zformat in {"zip","tar.gz","tar.bz2","tar.xz"}; do
       if curl -o /dev/null -s --head --fail $(build_url "macos" "$arch" "$version" "$zformat"); then
-        echo "macos ${zformat}"
+        found="macos ${zformat}"
         break
       fi
     done
+    if [ -n "$found" ]; then
+      echo "$found"
+    else
+      fail "Unsupported platform: $OSTYPE"
+    fi
     ;;
   *) fail "Unsupported platform: $OSTYPE" ;;
   esac
