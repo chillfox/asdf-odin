@@ -27,7 +27,7 @@ list_github_tags() {
   excludes=(0.9.1 llvm-4.0-windows llvm-windows pre-dev-2021-04 0.0.3c 0.0.3d 0.0.4 0.0.5 0.0.5a 0.0.5b 0.0.5c 0.0.5d 0.0.5e 0.0.6 0.0.6a 0.0.6b 0.1.0 0.1.1 0.1.3 0.10.0 0.11.0 0.11.1 0.12.0 0.13.0 0.2.0 0.2.1 0.3.0 0.4.0 0.5.0 0.6.0 0.6.1 0.6.1a 0.6.2 0.7.0 0.7.1 0.8.0 0.8.1 0.9.0)
   git ls-remote --tags --refs "$GH_REPO" |
     grep -o 'refs/tags/.*' | cut -d/ -f3- |
-    sed 's/^v//' | sed "$(printf -- "/^%s$/d;" ${excludes[*]})"
+    sed 's/^v//' | sed "$(printf -- "/^%s$/d;" "${excludes[@]}")"
 }
 
 list_all_versions() {
@@ -47,7 +47,8 @@ get_actual_download_url() {
   local pattern="odin-${platform}-${arch}-${version}"
 
   # Try to find a URL that matches our pattern and format
-  local url=$(curl "${curl_opts[@]}" "$api_url" 2>/dev/null | \
+  local url
+  url=$(curl "${curl_opts[@]}" "$api_url" 2>/dev/null | \
     grep -o '"browser_download_url": "[^"]*"' | \
     grep -o 'https://[^"]*' | \
     grep "${pattern}" | \
@@ -81,7 +82,8 @@ get_platform() {
   linux*)
     # Query GitHub API to find available downloads for this version
     local api_url="https://api.github.com/repos/odin-lang/Odin/releases/tags/${version}"
-    local available_downloads=$(curl "${curl_opts[@]}" "$api_url" 2>/dev/null | \
+    local available_downloads
+    available_downloads=$(curl "${curl_opts[@]}" "$api_url" 2>/dev/null | \
       grep -o '"browser_download_url": "[^"]*"' | \
       grep -o 'https://[^"]*' | \
       grep -E "(linux|ubuntu)" | \
@@ -106,7 +108,8 @@ get_platform() {
   darwin*)
     # Query GitHub API to find available downloads for this version
     local api_url="https://api.github.com/repos/odin-lang/Odin/releases/tags/${version}"
-    local available_downloads=$(curl "${curl_opts[@]}" "$api_url" 2>/dev/null | \
+    local available_downloads
+    available_downloads=$(curl "${curl_opts[@]}" "$api_url" 2>/dev/null | \
       grep -o '"browser_download_url": "[^"]*"' | \
       grep -o 'https://[^"]*' | \
       grep "macos" | \
